@@ -1,0 +1,1 @@
+"""Component inventory application package."""

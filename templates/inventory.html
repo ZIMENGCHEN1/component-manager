@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}库存流水 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><span class="eyebrow">INVENTORY LEDGER</span><h1>库存流水</h1><p>每次库存变化都保留记录；手动调整通过反向流水撤销，原记录不会被删除。</p></div>
+</header>
+<section class="card table-card">
+    <form class="toolbar ledger-filter" method="get">
+        <label class="search"><span>搜索</span><input name="q" value="{{ q }}" placeholder="料号、参数、封装或备注"></label>
+        <label><span>类型</span><select name="movement_type">{% for value, label in movement_types %}<option value="{{ value }}" {% if value == selected_type %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <button class="button" type="submit">筛选</button>
+        {% if q or selected_type %}<a class="button" href="/inventory">清除</a>{% endif %}
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>时间</th><th>元件</th><th>格位</th><th>类型</th><th class="number">变化</th><th class="number">变化后</th><th>来源 / 备注</th><th>操作</th></tr></thead><tbody>
+    {% for movement in movements %}
+    <tr>
+        <td class="nowrap">{{ movement.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td><strong class="code">{{ movement.component.supplier_part or '手动元件' }}</strong><small class="muted block">{{ movement.component.comment or '—' }}</small></td>
+        <td>{% if movement.component.storage_cell %}<a class="location" href="/storage#cell-{{ movement.component.storage_cell.id }}">{{ movement.component.storage_cell.box.name }} · {{ movement.component.storage_cell.label }}</a>{% else %}—{% endif %}</td>
+        <td><span class="status">{{ type_labels.get(movement.movement_type, movement.movement_type) }}</span></td>
+        <td class="number ledger-delta {% if movement.quantity_delta > 0 %}positive{% else %}negative{% endif %}">{{ '%+d'|format(movement.quantity_delta) }}</td>
+        <td class="number stock">{{ balance_after.get(movement.id, '—') }}</td>
+        <td>{% if movement.source_type == 'order_item' %}<small class="muted block">订单项 #{{ movement.source_id }}</small>{% elif movement.source_type == 'bom_item' %}<small class="muted block">BOM 行 #{{ movement.source_id }}</small>{% elif movement.source_type == 'stock_movement' %}<small class="muted block">撤销流水 #{{ movement.source_id }}</small>{% else %}<small class="muted block">手动操作</small>{% endif %}{{ movement.note or '—' }}</td>
+        <td>{% if movement.movement_type == 'adjustment' and movement.id not in reversed_ids %}<button class="button small danger-outline" data-reverse-movement="{{ movement.id }}">撤销</button>{% elif movement.id in reversed_ids %}<span class="status">已撤销</span>{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="8" class="empty-cell">没有符合条件的库存流水。</td></tr>{% endfor %}
+    </tbody></table></div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/inventory.js"></script>{% endblock %}

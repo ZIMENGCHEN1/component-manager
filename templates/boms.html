@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}BOM 领料 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><span class="eyebrow">PICKING</span><h1>BOM 领料</h1><p>确认导入只生成领料任务，不扣库。取料时点击高亮格位，逐格确认。</p></div>
+    <div class="header-actions"><a class="button" href="/components?show_bom_import=1">去 BOM 建库</a><button class="button primary" data-toggle="bom-import">导入领料 BOM</button></div>
+</header>
+<section id="bom-import" class="card form-card" hidden>
+    <div class="card-head"><h2>导入领料 BOM</h2><span class="muted">此处确认不会扣减库存</span></div>
+    <form id="bom-preview-form" class="upload-row">
+        <label><span>BOM 名称</span><input name="name" placeholder="例如 主控板 Rev.A" required></label>
+        <label class="file-pick"><span>选择文件</span><input name="file" type="file" accept=".xlsx" required></label>
+        <button class="button primary" type="submit">解析预览</button>
+    </form>
+    <div id="bom-preview" class="preview" hidden></div>
+</section>
+<div class="workspace-grid">
+    <aside class="card side-list">
+        <div class="card-head"><h2>BOM 列表</h2><span class="muted">{{ boms|length }} 份</span></div>
+        {% for bom in boms %}
+        <div class="bom-list-row"><a href="/boms?bom_id={{ bom.id }}" class="{% if selected and selected.id == bom.id %}selected{% endif %}"><span><strong>{{ bom.name }}</strong><small>{{ bom.file_name }}</small></span><em class="status {{ bom.status }}">{{ '已领料' if bom.status == 'picked' else '待领料' }}</em></a><button class="icon-danger" type="button" data-delete-bom="{{ bom.id }}" data-name="{{ bom.name|e }}" aria-label="删除 {{ bom.name }}">×</button></div>
+        {% else %}<div class="empty compact"><span>还没有 BOM</span></div>{% endfor %}
+    </aside>
+    <section class="content-stack">
+        {% if selected %}
+        <details class="card bom-detail" {% if expanded %}open{% endif %}>
+            <summary>
+                <span><span class="eyebrow">{{ selected.items|length }} 种元件</span><strong>{{ selected.name }}</strong><small>点击展开 / 收起领料明细</small></span>
+                <span class="status {{ selected.status }}">{{ '已完成' if selected.status == 'picked' else '领料中' }}</span>
+            </summary>
+            <div class="table-wrap"><table><thead><tr><th>料号</th><th>参数</th><th>封装</th><th>需求</th><th>可用</th><th>格位</th><th>状态</th></tr></thead>
+            {% set metadata_map = item_metadata|default({}) %}
+            {% set substitute_map = needs_substitute_by_item|default({}) %}
+            {% for item in selected.items %}
+            <tbody class="bom-item-record" data-bom-item-group="{{ item.id }}">
+            {% set metadata = metadata_map.get(item.id, {}) %}
+            {% set pending_required = pending_quantity_by_component.get(item.component_id, item.quantity) %}
+            {% set candidates = candidates_by_item.get(item.id, []) %}
+            <tr>
+                <td><strong class="code">{{ item.supplier_part }}</strong>{% if item.component and item.component.supplier_part != item.supplier_part %}<small class="substitute-part">实际领料：{{ item.component.supplier_part or '手动元件' }}</small>{% endif %}</td><td>{{ item.comment }}</td><td>{{ item.footprint }}</td><td>{{ item.quantity }}</td>
+                <td>{{ item.component.available_quantity if item.component else '—' }}</td>
+                <td>{% if item.component and item.component.storage_cell %}<a class="location" href="#cell-{{ item.component.storage_cell.id }}">{{ item.component.storage_cell.box.name }} · {{ item.component.storage_cell.label }}</a>{% else %}—{% endif %}</td>
+                <td>{% if item.id in picked_item_ids %}<span class="status picked">已领取</span>{% elif not item.component %}<span class="status unmatched">未建档</span>{% elif item.component.available_quantity < pending_required %}<span class="status shortage">合计缺 {{ pending_required - item.component.available_quantity }}</span>{% elif not item.component.storage_cell %}<span class="status pending_location">{% if item.component.supplier_part != item.supplier_part %}已选择替代 · 未定位{% else %}未定位{% endif %}</span>{% elif item.component.supplier_part != item.supplier_part %}<span class="status warning">已选择替代</span>{% elif item.warning %}<span class="status warning" title="{{ item.warning }}">可领料，参数需核对</span>{% else %}<span class="status ready">可领料</span>{% endif %}</td>
+            </tr>
+            {% if metadata.secondary_category or metadata.description %}
+            <tr class="bom-metadata-row"><td colspan="7"><div class="metadata-strip bom-source-metadata">
+                <div class="metadata-context"><strong>{{ '待替代物料资料' if substitute_map.get(item.id, false) else '物料资料' }}</strong></div>
+                <div class="metadata-field">
+                    <span class="metadata-category">{{ metadata.secondary_category or '—' }}</span>
+                    {% if metadata.category_from_library %}<small class="metadata-source">元件库补显</small>{% endif %}
+                </div>
+                <div class="metadata-field">
+                    {% if metadata.description %}<details class="metadata-description"><summary><span>{{ metadata.description }}</span><em>展开</em></summary><p>{{ metadata.description }}</p></details>{% else %}<span class="muted">—</span>{% endif %}
+                    {% if metadata.description_from_library %}<small class="metadata-source">元件库补显</small>{% endif %}
+                </div>
+            </div></td></tr>
+            {% endif %}
+            {% if candidates %}
+            <tr class="candidate-row"><td colspan="7">
+                <div class="candidate-panel">
+                    <div class="candidate-head"><strong>参数匹配候选</strong><span class="muted">Footprint 不参与匹配，请人工确认</span></div>
+                    <div class="candidate-list">
+                    {% for candidate in candidates %}
+                        {% set candidate_required = candidate_requirements[item.id][candidate.id] %}
+                        <article class="candidate-card {% if item.component_id == candidate.id %}selected{% endif %}">
+                            <span class="code">{{ candidate.supplier_part or '手动元件' }}</span>
+                            <strong>{{ candidate.comment }}</strong>
+                            <small>Footprint：{{ candidate.footprint or '—' }}</small>
+                            <small>厂家：{{ candidate.manufacturer or '—' }} {{ candidate.manufacturer_part }}</small>
+                            <small>库存：{{ candidate.available_quantity }} · 格位：{% if candidate.storage_cell %}{{ candidate.storage_cell.box.name }} · {{ candidate.storage_cell.label }}{% else %}未分配{% endif %}</small>
+                            <small>本 BOM 合计需：{{ candidate_required }} 件</small>
+                            <span class="metadata-category">{{ candidate.secondary_category or '—' }}</span>
+                            {% if candidate.description %}<details class="metadata-description compact"><summary><span>{{ candidate.description }}</span><em>展开</em></summary><p>{{ candidate.description }}</p></details>{% endif %}
+                            {% if candidate.secondary_category != metadata.secondary_category or candidate.description != metadata.description %}<span class="metadata-difference">与待替代物料不同</span>{% endif %}
+                            {% if candidate.available_quantity >= candidate_required and item.id not in picked_item_ids and selected.status != 'picked' %}
+                            <button class="button small {% if item.component_id != candidate.id %}primary{% endif %}" data-substitute-item="{{ item.id }}" data-component-id="{{ candidate.id }}">{{ '已选择' if item.component_id == candidate.id else '确认本次替代' }}</button>
+                            {% if not candidate.storage_cell %}<span class="status pending_location">未分配格位</span>{% endif %}
+                            {% elif candidate.available_quantity < candidate_required %}<span class="status shortage">合计缺 {{ candidate_required - candidate.available_quantity }}</span>
+                            {% else %}<span class="status picked">已领料</span>{% endif %}
+                        </article>
+                    {% endfor %}
+                    </div>
+                </div>
+            </td></tr>
+            {% endif %}
+            </tbody>
+            {% endfor %}
+            </table></div>
+        </details>
+
+        {% for box in boxes %}
+        {% set ns = namespace(count=0) %}{% for cell in box.cells %}{% if cell.id in pick_groups %}{% set ns.count = ns.count + 1 %}{% endif %}{% endfor %}
+        {% if ns.count %}
+        <article class="card box-card">
+            <div class="card-head"><div><span class="eyebrow">涉及 {{ ns.count }} 格</span><h2>{{ box.name }}</h2></div><span class="muted">相同实际元件已合并，点击高亮格位确认取料</span></div>
+            <div class="storage-grid" style="--columns: {{ box.columns }}">
+            {% for cell in box.cells %}
+                {% if cell.id in pick_groups %}{% set group = pick_groups[cell.id] %}
+                    {% if not group.pending_items %}
+                    <div id="cell-{{ cell.id }}" class="storage-cell picked-cell" data-picked-item="{{ group.items[0].id }}">
+                        <span class="cell-label">{{ cell.label }}</span><strong>{{ group.component.supplier_part }}</strong><small>{{ group.component.comment }}</small><em>已领取 {{ group.total_quantity }} 件</em>
+                        <div class="pick-group-breakdown">
+                        {% for source in group.display_items %}
+                            <small><b>{{ source.supplier_part }}</b>：{{ source.quantity }} 件 · 焊接 {{ source.designators or '—' }}</small>
+                        {% endfor %}
+                        </div>
+                        <div class="picked-overlay"><strong>已领取</strong><span>{{ group.total_quantity }} 件</span></div>
+                    </div>
+                    {% elif group.component.available_quantity >= group.pending_quantity and selected.status != 'picked' %}
+                    <div id="cell-{{ cell.id }}" class="storage-cell highlight pickable-cell" data-pick-item="{{ group.pending_items[0].id }}" tabindex="0" role="button">
+                        <span class="cell-label">{{ cell.label }}</span><strong>{{ group.component.supplier_part }}</strong><small>{{ group.component.comment }}</small><em>共取 {{ group.pending_quantity }} 件</em>
+                        <div class="pick-group-breakdown">
+                        {% for source in group.pending_items %}
+                            <small><b>{% if source.supplier_part != group.component.supplier_part %}{{ source.supplier_part }} → {{ group.component.supplier_part }}{% else %}{{ source.supplier_part }}{% endif %}</b>：{{ source.quantity }} 件 · 焊接 {{ source.designators or '—' }}</small>
+                        {% endfor %}
+                        </div>
+                        <div class="pick-overlay" hidden>
+                            <strong>确认领取 {{ group.pending_quantity }} 件？</strong>
+                            <div><button class="button small primary" data-confirm-pick="{{ group.pending_items[0].id }}">确认领料</button><button class="button small" data-cancel-pick>取消</button></div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div id="cell-{{ cell.id }}" class="storage-cell blocked-cell">
+                        <span class="cell-label">{{ cell.label }}</span><strong>{{ group.component.supplier_part }}</strong><small>{{ group.component.comment }}</small><em>合计需 {{ group.pending_quantity }} 件 · 缺 {{ group.pending_quantity - group.component.available_quantity }}</em>
+                        <div class="pick-group-breakdown">
+                        {% for source in group.pending_items %}
+                            <small><b>{{ source.supplier_part }}</b>：{{ source.quantity }} 件 · 焊接 {{ source.designators or '—' }}</small>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                {% elif cell.component %}
+                <div id="cell-{{ cell.id }}" class="storage-cell occupied muted-cell"><span class="cell-label">{{ cell.label }}</span><small>{{ cell.component.supplier_part }}</small></div>
+                {% else %}
+                <div id="cell-{{ cell.id }}" class="storage-cell"><span class="cell-label">{{ cell.label }}</span><span class="empty-label">空</span></div>
+                {% endif %}
+            {% endfor %}
+            </div>
+        </article>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <article class="card empty"><b>选择或导入领料 BOM</b><span>导入确认只建立任务，库存在格位内逐一确认后才扣减。</span></article>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/boms.js"></script>{% endblock %}

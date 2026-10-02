@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}概览 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><span class="eyebrow">WORKSPACE</span><h1>库存概览</h1><p>从订单入库到 BOM 领料，所有数量与格位在这里串起来。</p></div>
+</header>
+<section class="stat-grid">
+    <article class="stat-card accent-blue"><span>元件种类</span><strong>{{ stats.component_kinds }}</strong><small>个独立料号</small></article>
+    <article class="stat-card accent-green"><span>可用库存</span><strong>{{ stats.total_pieces }}</strong><small>件</small></article>
+    <article class="stat-card accent-amber"><span>待归位</span><strong>{{ stats.pending_location }}</strong><small>订单项</small></article>
+    <article class="stat-card accent-red"><span>未匹配</span><strong>{{ stats.unmatched }}</strong><small>需要处理</small></article>
+</section>
+<section class="two-col">
+    <article class="card">
+        <div class="card-head"><div><span class="eyebrow">QUICK START</span><h2>建议流程</h2></div></div>
+        <ol class="workflow">
+            <li><b>01</b><span><strong>BOM 建库</strong><small>根据 Supplier Part 建立零库存元件档案</small></span></li>
+            <li><b>02</b><span><strong>导入订单</strong><small>按发货数量入库，新料号进入待归位</small></span></li>
+            <li><b>03</b><span><strong>分配格位</strong><small>将系统表格与实体收纳盒一一对应</small></span></li>
+            <li><b>04</b><span><strong>BOM 领料</strong><small>高亮目标格位，确认后一次性扣库</small></span></li>
+        </ol>
+    </article>
+    <article class="card">
+        <div class="card-head"><div><span class="eyebrow">RECENT</span><h2>最近 BOM</h2></div><a class="text-link" href="/boms">全部 BOM</a></div>
+        {% if recent_boms %}
+        <div class="list">
+            {% for bom in recent_boms %}<a href="/boms?bom_id={{ bom.id }}"><span><strong>{{ bom.name }}</strong><small>{{ bom.file_name }}</small></span><em class="status {{ bom.status }}">{{ '已领料' if bom.status == 'picked' else '待领料' }}</em></a>{% endfor %}
+        </div>
+        {% else %}<div class="empty"><b>还没有领料 BOM</b><span>先建立元件库，再导入领料 BOM。</span><a class="button primary" href="/components?show_bom_import=1">BOM 建库</a></div>{% endif %}
+    </article>
+</section>
+{% endblock %}

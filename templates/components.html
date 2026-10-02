@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}元件库 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header">
+    <div><span class="eyebrow">LIBRARY</span><h1>元件库</h1><p>Supplier Part 是供应商内的精确匹配键；Comment 和 Footprint 用于记录规格与封装。</p></div>
+    <div class="header-actions"><button class="button" data-toggle="bom-library-import">BOM 建库</button><button class="button primary" data-toggle="component-form">手动添加</button></div>
+</header>
+<section id="bom-library-import" class="card form-card" hidden>
+    <div class="card-head"><div><span class="eyebrow">BOM LIBRARY IMPORT</span><h2>从 BOM 批量建立元件</h2></div><span class="muted">只建档，不改变库存和格位</span></div>
+    <form id="bom-library-preview-form" class="upload-row"><label class="file-pick"><span>BOM 文件</span><input name="file" type="file" accept=".xlsx" required></label><button class="button primary" type="submit">解析预览</button></form>
+    <div id="bom-library-preview" class="preview" hidden></div>
+    <div id="bom-library-conflicts" class="conflict-panel" hidden>
+        <div class="conflict-actions"><strong>字段差异（默认使用 BOM 值）</strong><span><button class="button small" type="button" data-select-all-conflicts>全选</button><button class="button small" type="button" data-clear-all-conflicts>全不选</button></span></div>
+        <div data-conflict-list></div>
+    </div>
+</section>
+<section id="component-form" class="card form-card" hidden>
+    <div class="card-head"><h2>新建元件</h2><span class="muted">可不填供应商编号</span></div>
+    <form id="add-component" class="form-grid">
+        <label><span>Supplier Part</span><input name="supplier_part" placeholder="例如 C11366"></label><label><span>Comment / 参数</span><input name="comment" placeholder="例如 22uF ±10% 10V"></label><label><span>Footprint / 封装</span><input name="footprint" placeholder="例如 CASE-A-3216-18"></label><label><span>制造商</span><input name="manufacturer"></label><label><span>制造商型号</span><input name="manufacturer_part"></label><label><span>Secondary Category / 二级分类</span><input name="secondary_category"></label><label class="wide-field"><span>Description / 详细参数</span><textarea name="description" rows="3"></textarea></label><div class="form-actions"><button class="button primary" type="submit">保存元件</button></div>
+    </form>
+</section>
+<section id="component-edit-panel" class="card form-card" hidden>
+    <div class="card-head"><h2>编辑元件</h2><button class="button small" type="button" data-close-component-edit>取消</button></div>
+    <form id="edit-component" class="form-grid">
+        <input name="id" type="hidden"><label><span>供应商</span><input name="supplier"></label><label><span>Supplier Part</span><input name="supplier_part"></label><label><span>Comment / 参数</span><input name="comment"></label><label><span>Footprint / 封装</span><input name="footprint"></label><label><span>制造商</span><input name="manufacturer"></label><label><span>制造商型号</span><input name="manufacturer_part"></label><label><span>Secondary Category / 二级分类</span><input name="secondary_category"></label><label class="wide-field"><span>Description / 详细参数</span><textarea name="description" rows="3"></textarea></label><div class="form-actions"><button class="button primary" type="submit">保存修改</button></div>
+    </form>
+</section>
+<section class="card table-card">
+    <form class="toolbar component-filter" method="get" action="/components"><label class="search"><span>搜索</span><input name="q" value="{{ q }}" placeholder="料号、参数、封装或格位"></label><button class="button" type="submit">搜索</button>{% if q %}<a class="button" href="/components">清除</a>{% endif %}<span class="muted">共 {{ total_components }} 种</span></form>
+    <div class="table-wrap"><table><thead><tr><th>Supplier Part</th><th>参数</th><th>封装</th><th>厂家型号</th><th>格位</th><th class="number">可用</th><th>操作</th></tr></thead>
+    {% for component in components %}
+    <tbody class="component-record" data-component-group="{{ component.id }}">
+    <tr data-component-row="{{ component.id }}">
+        <td><strong class="code">{{ component.supplier_part or '手动元件' }}</strong></td><td>{{ component.comment or '—' }}</td><td>{{ component.footprint or '—' }}</td><td>{{ component.manufacturer_part or '—' }}</td><td>{% if component.storage_cell %}<a class="location" href="/storage#cell-{{ component.storage_cell.id }}">{{ component.storage_cell.box.name }} · {{ component.storage_cell.label }}</a>{% else %}<span class="status pending_location">未分配</span>{% endif %}</td><td class="number stock">{{ component.available_quantity }}</td>
+        <td><div class="action-row"><button class="button small" data-adjust="{{ component.id }}" data-name="{{ component.supplier_part or component.comment }}">库存</button><button class="button small" data-edit-component="{{ component.id }}" data-supplier="{{ component.supplier or '' }}" data-part="{{ component.supplier_part or '' }}" data-comment="{{ component.comment|e }}" data-footprint="{{ component.footprint|e }}" data-manufacturer="{{ component.manufacturer|e }}" data-manufacturer-part="{{ component.manufacturer_part|e }}" data-secondary-category="{{ component.secondary_category|e }}" data-description="{{ component.description|e }}">编辑</button><button class="button small danger-outline" data-delete-component="{{ component.id }}" data-name="{{ component.supplier_part or component.comment }}">删除</button></div></td>
+    </tr>
+    {% if component.secondary_category or component.description %}
+    <tr class="component-metadata-row" data-component-meta="{{ component.id }}"><td colspan="7"><div class="metadata-strip">
+        <span class="metadata-category">{{ component.secondary_category or '—' }}</span>
+        {% if component.description %}<details class="metadata-description"><summary><span>{{ component.description }}</span><em>展开</em></summary><p>{{ component.description }}</p></details>{% else %}<span class="muted">—</span>{% endif %}
+    </div></td></tr>
+    {% endif %}
+    </tbody>
+    {% else %}<tbody><tr><td colspan="7" class="empty-cell">还没有元件，可以手动添加或从 BOM 建库。</td></tr></tbody>{% endfor %}
+    </table></div>
+    {% if page_count > 1 %}
+    <nav class="pagination" aria-label="元件库分页">
+        {% if page > 1 %}<a class="button small" href="/components?q={{ q|urlencode }}&amp;page=1">首页</a><a class="button small" href="/components?q={{ q|urlencode }}&amp;page={{ page - 1 }}">上一页</a>{% else %}<span class="button small disabled">首页</span><span class="button small disabled">上一页</span>{% endif %}
+        {% for number in page_numbers %}<a class="button small{% if number == page %} primary{% endif %}" href="/components?q={{ q|urlencode }}&amp;page={{ number }}"{% if number == page %} aria-current="page"{% endif %}>{{ number }}</a>{% endfor %}
+        {% if page < page_count %}<a class="button small" href="/components?q={{ q|urlencode }}&amp;page={{ page + 1 }}">下一页</a><a class="button small" href="/components?q={{ q|urlencode }}&amp;page={{ page_count }}">末页</a>{% else %}<span class="button small disabled">下一页</span><span class="button small disabled">末页</span>{% endif %}
+        <span class="muted">第 {{ page }} / {{ page_count }} 页</span>
+    </nav>
+    {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/bom_library.js"></script><script src="/static/js/components.js"></script>{% endblock %}

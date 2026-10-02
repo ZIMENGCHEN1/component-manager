@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}收纳盒 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header"><div><span class="eyebrow">PHYSICAL MAP</span><h1>收纳盒</h1><p>管理收纳盒名称和行列，并编辑每个格位的标识与元件。</p></div><button class="button primary" data-toggle="box-form">新建收纳盒</button></header>
+<section id="box-form" class="card form-card" hidden>
+    <div class="card-head"><h2>自定义收纳盒</h2><span class="muted">例如“24 格黑盒”，4 行 × 6 列</span></div>
+    <form id="add-box" class="form-grid compact"><label><span>盒子名称</span><input name="name" required placeholder="例如 钽电容盒 A"></label><label><span>行数</span><input name="rows" type="number" min="1" max="50" value="4" required></label><label><span>列数</span><input name="columns" type="number" min="1" max="50" value="6" required></label><div class="form-actions"><button class="button primary" type="submit">创建网格</button></div></form>
+</section>
+{% if boxes %}
+{% for box in boxes %}
+<section class="card box-card" data-box-card="{{ box.id }}">
+    <div class="card-head"><div><span class="eyebrow">{{ box.rows }} × {{ box.columns }}</span><h2>{{ box.name }}</h2></div><div class="header-actions"><span class="muted">{{ box.cells|selectattr('component_id')|list|length }} / {{ box.cells|length }} 已使用</span><button class="button small" data-edit-box="{{ box.id }}">编辑盒子</button><button class="button small danger-outline" data-delete-box="{{ box.id }}" data-name="{{ box.name }}">删除盒子</button></div></div>
+    <form class="box-edit-form form-grid compact" data-box-edit-form="{{ box.id }}" hidden><label><span>盒子名称</span><input name="name" value="{{ box.name|e }}" required></label><label><span>行数</span><input name="rows" type="number" min="1" max="50" value="{{ box.rows }}" required></label><label><span>列数</span><input name="columns" type="number" min="1" max="50" value="{{ box.columns }}" required></label><div class="form-actions"><button class="button small primary" type="submit">保存</button><button class="button small" type="button" data-cancel-box-edit="{{ box.id }}">取消</button></div></form>
+    <div class="storage-grid" style="--columns: {{ box.columns }}">
+        {% for cell in box.cells %}<article id="cell-{{ cell.id }}" class="storage-cell {% if cell.component %}occupied{% endif %}">
+            <span class="cell-label">{{ cell.label }}</span><button class="cell-edit-trigger" type="button" data-edit-cell="{{ cell.id }}" aria-label="编辑 {{ cell.label }}">编辑</button>
+            <div data-cell-display="{{ cell.id }}">{% if cell.component %}<strong>{{ cell.component.supplier_part or cell.component.comment }}</strong><small>{{ cell.component.comment }} · {{ cell.component.footprint }}</small><em>{{ cell.component.available_quantity }} 件</em>{% else %}<span class="empty-label">空格</span>{% endif %}</div>
+            <form class="cell-edit-form" data-cell-edit-form="{{ cell.id }}" hidden><label><span>格位标识</span><input name="label" value="{{ cell.label|e }}" required></label><label><span>所放元件</span><select name="component_id"><option value="">空格</option>{% for component in components if not component.storage_cell or component.id == cell.component_id %}<option value="{{ component.id }}" {% if component.id == cell.component_id %}selected{% endif %}>{{ component.supplier_part or '手动元件' }} · {{ component.comment }}</option>{% endfor %}</select></label><div class="cell-edit-actions"><button class="button small primary" type="submit">保存</button><button class="button small" type="button" data-cancel-cell-edit="{{ cell.id }}">取消</button></div></form>
+        </article>{% endfor %}
+    </div>
+</section>
+{% endfor %}
+{% else %}<section class="card empty"><b>还没有收纳盒</b><span>根据手上实际盒子的行列建立第一个网格。</span></section>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/js/storage.js"></script>{% endblock %}

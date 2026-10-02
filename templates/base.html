@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}元件管理系统{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" href="/">
+            <span class="brand-mark">CM</span>
+            <span><strong>元件管理</strong><small>Component Manager</small></span>
+        </a>
+        <nav>
+            <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">概览</a>
+            <a href="/components" class="{% if request.url.path == '/components' %}active{% endif %}">元件库</a>
+            <a href="/storage" class="{% if request.url.path == '/storage' %}active{% endif %}">收纳盒</a>
+            <a href="/inventory" class="{% if request.url.path == '/inventory' %}active{% endif %}">库存流水</a>
+            <a href="/orders" class="{% if request.url.path == '/orders' %}active{% endif %}">订单入库</a>
+            <a href="/boms" class="{% if request.url.path == '/boms' %}active{% endif %}">BOM 领料</a>
+            <a href="/data-management" class="{% if request.url.path == '/data-management' %}active{% endif %}">数据管理</a>
+        </nav>
+        <div class="sidebar-foot">本地单用户 · SQLite</div>
+    </aside>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <div id="toast" class="toast" hidden></div>
+    <script src="/static/js/common.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

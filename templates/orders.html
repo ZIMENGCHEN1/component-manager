@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}订单入库 · 元件管理系统{% endblock %}
+{% block content %}
+<header class="page-header"><div><span class="eyebrow">RECEIVING</span><h1>订单入库</h1><p>按立创商品编号精确匹配，以“发货数量”入库。待归位元件可在收纳盒网格中快速选位。</p></div><button class="button primary" data-toggle="order-import">导入立创订单</button></header>
+<section id="order-import" class="card form-card" hidden><div class="card-head"><h2>导入订单详情</h2><span class="muted">支持立创商城 .xls</span></div><form id="order-preview-form" class="upload-row"><label class="file-pick"><span>选择文件</span><input name="file" type="file" accept=".xls" required></label><button class="button primary" type="submit">解析预览</button></form><div id="order-preview" class="preview" hidden></div></section>
+{% if orders %}
+{% for order in orders %}{% set pending_items = order.items|selectattr('status', 'equalto', 'pending_location')|list %}
+<details class="card order-card" data-order-card="{{ order.id }}">
+    <summary><span><span class="eyebrow">{{ order.items|length }} 项 · {{ pending_items|length }} 项待归位</span><strong>{{ order.order_number }}</strong><small>{{ order.file_name }} · {{ order.imported_at.strftime('%Y-%m-%d %H:%M') }}</small></span><span class="status {% if pending_items %}pending_location{% else %}stocked{% endif %}">{{ '待处理' if pending_items else '已完成' }}</span></summary>
+    <div class="table-wrap"><table><thead><tr><th>商品编号</th><th>厂家型号 / 商品</th><th>发货数量</th><th>处理状态</th><th>下一步</th></tr></thead><tbody>
+    {% for item in order.items %}<tr><td><strong class="code">{{ item.supplier_part }}</strong></td><td><strong>{{ item.manufacturer_part or '—' }}</strong><small class="block muted">{{ item.product_name }}</small></td><td>{{ item.shipped_quantity }}</td><td><span class="status {{ item.status }}">{{ {'unmatched':'未匹配','pending_location':'待归位','stocked':'已入库'}[item.status] }}</span></td><td>
+        {% if item.status == 'unmatched' %}<div class="inline-action"><select data-link-select="{{ item.id }}"><option value="">选择已有元件…</option>{% for component in components %}<option value="{{ component.id }}">{{ component.supplier_part or '手动元件' }} · {{ component.comment }}</option>{% endfor %}</select><button class="button small" data-link-item="{{ item.id }}">建立关联</button></div>
+        {% elif item.status == 'pending_location' %}<button class="button small primary" data-select-order-item="{{ item.id }}" data-label="{{ item.supplier_part }} · {{ item.product_name|e }} · {{ item.shipped_quantity }} 件">在收纳盒中选位</button>
+        {% else %}{% if item.component and item.component.storage_cell %}<a class="location" href="/storage#cell-{{ item.component.storage_cell.id }}">{{ item.component.storage_cell.box.name }} · {{ item.component.storage_cell.label }}</a>{% else %}—{% endif %}{% endif %}
+    </td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if pending_items %}<section class="order-storage-panel" data-order-storage-panel="{{ order.id }}"><div class="card-head"><div><span class="eyebrow">QUICK STORAGE</span><h3>可视化快捷收纳</h3></div><strong data-selected-order-label>请先在上表选择一个待归位元件</strong></div>
+        {% for box in boxes %}<div class="mini-box"><div class="mini-box-head"><strong>{{ box.name }}</strong><small>{{ box.rows }} × {{ box.columns }}</small></div><div class="storage-grid order-storage-grid" style="--columns: {{ box.columns }}">{% for cell in box.cells %}<button type="button" class="storage-cell order-cell {% if cell.component_id %}occupied{% else %}available-cell{% endif %}" {% if not cell.component_id %}data-order-cell="{{ cell.id }}"{% else %}disabled{% endif %}><span class="cell-label">{{ cell.label }}</span>{% if cell.component %}<strong>{{ cell.component.supplier_part or cell.component.comment }}</strong><small>{{ cell.component.comment }}</small>{% else %}<span class="empty-label">点击放入</span>{% endif %}</button>{% endfor %}</div></div>{% endfor %}
+    </section>{% endif %}
+</details>
+{% endfor %}
+{% else %}<section class="card empty"><b>还没有订单</b><span>导入后，已有格位的元件自动入库，新元件通过可视化网格归位。</span></section>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/js/orders.js"></script>{% endblock %}
